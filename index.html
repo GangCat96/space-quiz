@@ -227,11 +227,18 @@
   .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; animation: popIn .4s backwards; }
   .dots i.g { background: var(--good); }
   .dots i.r { background: var(--bad); }
-  .review { text-align: left; padding-left: 24px; overflow-wrap: anywhere; }
-  .review li { padding: 16px 0; border-bottom: 1px solid var(--border); }
-  .review h3 { font-size: 16px; margin: 0 0 8px; }
-  .review p { color: var(--text); margin: 0 0 8px; }
-  .review .fact { color: var(--muted); }
+  .review-toggle { margin: 0 0 12px; }
+  .review-panel { position: relative; z-index: 1; display: grid; gap: 10px; margin-bottom: 16px; text-align: left; }
+  .review-panel[hidden] { display: none; }
+  .review-item {
+    min-width: 0; padding: 12px; border: 1px solid var(--border);
+    border-radius: 12px; background: var(--bg); overflow-wrap: anywhere;
+  }
+  .review-item h3 { font-size: 15px; line-height: 1.4; margin: 0 0 8px; }
+  .review-item p { margin: 5px 0 0; }
+  .review-item strong { color: var(--text); }
+  .review-item .review-fact { color: var(--muted); }
+  .results p.all-correct { margin-bottom: 12px; }
 
   .stars { position: fixed; inset: 0; pointer-events: none; z-index: -1; }
   .confetti { position: fixed; top: -12px; width: 8px; height: 12px; border-radius: 2px; pointer-events: none; animation: fall linear forwards; }
@@ -291,10 +298,20 @@ const QUESTIONS = [
 ];
 
 const card = document.getElementById("card");
+function shuffledQuestions() {
+  const questions = [...QUESTIONS];
+  for (let i = questions.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [questions[i], questions[j]] = [questions[j], questions[i]];
+  }
+  return questions;
+}
+
+let attemptQuestions = shuffledQuestions();
 let idx = 0, score = 0, answered = false, history = [];
 
 function renderQuestion(moveFocus = false) {
-  const item = QUESTIONS[idx];
+  const item = attemptQuestions[idx];
   answered = false;
   card.classList.remove("celebrate");
   card.innerHTML = `
@@ -323,10 +340,10 @@ function renderQuestion(moveFocus = false) {
 function choose(i) {
   if (answered) return;
   answered = true;
-  const item = QUESTIONS[idx];
+  const item = attemptQuestions[idx];
   const opts = [...card.querySelectorAll(".option")];
   const correct = i === item.c;
-  history.push({ selected: i, correct });
+  history.push({ selectedIndex: i, correct });
   opts.forEach((b, j) => {
     b.disabled = true;
     if (j === item.c) b.classList.add("correct");
@@ -366,17 +383,8 @@ function renderResults() {
     pct >= .3   ? ["🤔", "Houston, we have a problem…", "Time to brush up on the cosmos."] :
                   ["😵", "Lost in space!", "Every astronaut starts somewhere — try again!"];
   const celebrate = pct >= .8;
-  const missed = history.map(({ selected, correct }, i) => {
-    if (correct) return "";
-    const item = QUESTIONS[i];
-    return `<li>
-      <h3>Question ${i + 1}: ${item.q}</h3>
-      <p><strong>Your answer:</strong> ${item.a[selected]}</p>
-      <p><strong>Correct answer:</strong> ${item.a[item.c]}</p>
-      <p class="fact">${item.f}</p>
-    </li>`;
-  }).join("");
   card.classList.toggle("celebrate", celebrate);
+  const missed = history.some(answer => !answer.correct);
   card.innerHTML = `
     <div class="results fade-in">
       ${celebrate ? `<div class="badge">🏅 Mission accomplished</div><br>` : ""}
@@ -387,23 +395,36 @@ function renderResults() {
       <h2>${title}</h2>
       <div class="big">${score} / ${QUESTIONS.length}</div>
       <p>${msg}</p>
-      <div class="dots" role="img" aria-label="${score} of ${QUESTIONS.length} answers correct">${history.map(({ correct }, i) => `<i class="${correct ? "g" : "r"}" style="animation-delay:${i * 60}ms" title="Q${i + 1}: ${correct ? "correct" : "wrong"}"></i>`).join("")}</div>
+      <div class="dots" role="img" aria-label="${score} of ${QUESTIONS.length} answers correct">${history.map((answer, i) => `<i class="${answer.correct ? "g" : "r"}" style="animation-delay:${i * 60}ms" title="Q${i + 1}: ${answer.correct ? "correct" : "wrong"}"></i>`).join("")}</div>
       ${missed ? `
-        <button class="btn" id="review-toggle" aria-expanded="false" aria-controls="missed-review">Show missed questions (${QUESTIONS.length - score})</button>
-        <ol class="review" id="missed-review" hidden>${missed}</ol>
-      ` : `<p>All answers correct — no missed questions to review!</p>`}
+        <button class="btn review-toggle" id="review-toggle" type="button" aria-expanded="false" aria-controls="missed-review">Review missed answers</button>
+        <section class="review-panel" id="missed-review" aria-label="Missed answer review" hidden>
+          ${history.map((answer, i) => {
+            if (answer.correct) return "";
+            const item = attemptQuestions[i];
+            return `<article class="review-item">
+              <h3>Question ${i + 1}: ${item.q}</h3>
+              <p><strong>Your answer:</strong> ${item.a[answer.selectedIndex]}</p>
+              <p><strong>Correct answer:</strong> ${item.a[item.c]}</p>
+              <p class="review-fact">${item.f}</p>
+            </article>`;
+          }).join("")}
+        </section>` : `<p class="all-correct">All answers correct — nothing to review.</p>`}
       <button class="btn" id="restart">Play again</button>
     </div>`;
   const reviewToggle = document.getElementById("review-toggle");
-  if (reviewToggle) reviewToggle.addEventListener("click", () => {
+  if (reviewToggle) {
     const review = document.getElementById("missed-review");
-    review.hidden = !review.hidden;
-    reviewToggle.setAttribute("aria-expanded", String(!review.hidden));
-    reviewToggle.textContent = `${review.hidden ? "Show" : "Hide"} missed questions (${QUESTIONS.length - score})`;
-  });
+    reviewToggle.addEventListener("click", () => {
+      const expanded = reviewToggle.getAttribute("aria-expanded") === "true";
+      reviewToggle.setAttribute("aria-expanded", String(!expanded));
+      reviewToggle.textContent = expanded ? "Review missed answers" : "Hide missed answers";
+      review.hidden = expanded;
+    });
+  }
   const restart = document.getElementById("restart");
   restart.addEventListener("click", () => {
-    idx = 0; score = 0; history = []; renderQuestion(true);
+    idx = 0; score = 0; history = []; attemptQuestions = shuffledQuestions(); renderQuestion(true);
   });
   restart.focus({ preventScroll: true });
   if (celebrate && !reduceMotion.matches) confetti();
