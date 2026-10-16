@@ -223,6 +223,15 @@
     background: linear-gradient(90deg, var(--accent), var(--accent-2));
     -webkit-background-clip: text; background-clip: text; color: transparent; }
   .results p { color: var(--muted); margin: 0 0 16px; }
+  .result-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .result-actions .btn { min-width: 0; margin-top: 8px; }
+  .copy-result-status { margin: 10px 0 0 !important; }
+  .copy-fallback {
+    width: 100%; margin-top: 8px; padding: 10px;
+    color: var(--text); background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; font: inherit; text-align: left; resize: vertical;
+  }
+  .copy-fallback[hidden] { display: none; }
   .dots { display: flex; justify-content: center; gap: 6px; margin: 0 0 18px; flex-wrap: wrap; }
   .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; animation: popIn .4s backwards; }
   .dots i.g { background: var(--good); }
@@ -374,6 +383,27 @@ function next() {
   idx < QUESTIONS.length ? renderQuestion(true) : renderResults();
 }
 
+function formatResult(score, total, title) {
+  return `Space Exploration Quiz\nScore: ${score} / ${total}\nResult: ${title}`;
+}
+
+async function copyResult(summary, status, fallback) {
+  try {
+    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+      throw new Error("Clipboard access is unavailable.");
+    }
+    await navigator.clipboard.writeText(summary);
+    status.textContent = "Result copied to clipboard.";
+    fallback.hidden = true;
+  } catch {
+    status.textContent = "Unable to copy automatically. Select and copy the result below.";
+    fallback.value = summary;
+    fallback.hidden = false;
+    fallback.focus();
+    fallback.select();
+  }
+}
+
 function renderResults() {
   const pct = score / QUESTIONS.length;
   const [emoji, title, msg] =
@@ -383,6 +413,7 @@ function renderResults() {
     pct >= .3   ? ["🤔", "Houston, we have a problem…", "Time to brush up on the cosmos."] :
                   ["😵", "Lost in space!", "Every astronaut starts somewhere — try again!"];
   const celebrate = pct >= .8;
+  const resultSummary = formatResult(score, QUESTIONS.length, title);
   card.classList.toggle("celebrate", celebrate);
   const missed = history.some(answer => !answer.correct);
   card.innerHTML = `
@@ -410,7 +441,12 @@ function renderResults() {
             </article>`;
           }).join("")}
         </section>` : `<p class="all-correct">All answers correct — nothing to review.</p>`}
-      <button class="btn" id="restart">Play again</button>
+      <div class="result-actions">
+        <button class="btn" id="copy-result" type="button">Copy result</button>
+        <button class="btn" id="restart" type="button">Play again</button>
+      </div>
+      <p class="copy-result-status" id="copy-result-status" role="status" aria-live="polite"></p>
+      <textarea class="copy-fallback" id="copy-result-fallback" aria-label="Quiz result to copy" readonly hidden></textarea>
     </div>`;
   const reviewToggle = document.getElementById("review-toggle");
   if (reviewToggle) {
@@ -422,6 +458,9 @@ function renderResults() {
       review.hidden = expanded;
     });
   }
+  document.getElementById("copy-result").addEventListener("click", () => {
+    copyResult(resultSummary, document.getElementById("copy-result-status"), document.getElementById("copy-result-fallback"));
+  });
   const restart = document.getElementById("restart");
   restart.addEventListener("click", () => {
     idx = 0; score = 0; history = []; attemptQuestions = shuffledQuestions(); renderQuestion(true);
