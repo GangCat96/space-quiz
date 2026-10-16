@@ -227,6 +227,11 @@
   .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; animation: popIn .4s backwards; }
   .dots i.g { background: var(--good); }
   .dots i.r { background: var(--bad); }
+  .review { text-align: left; padding-left: 24px; overflow-wrap: anywhere; }
+  .review li { padding: 16px 0; border-bottom: 1px solid var(--border); }
+  .review h3 { font-size: 16px; margin: 0 0 8px; }
+  .review p { color: var(--text); margin: 0 0 8px; }
+  .review .fact { color: var(--muted); }
 
   .stars { position: fixed; inset: 0; pointer-events: none; z-index: -1; }
   .confetti { position: fixed; top: -12px; width: 8px; height: 12px; border-radius: 2px; pointer-events: none; animation: fall linear forwards; }
@@ -321,7 +326,7 @@ function choose(i) {
   const item = QUESTIONS[idx];
   const opts = [...card.querySelectorAll(".option")];
   const correct = i === item.c;
-  history.push(correct);
+  history.push({ selected: i, correct });
   opts.forEach((b, j) => {
     b.disabled = true;
     if (j === item.c) b.classList.add("correct");
@@ -361,6 +366,16 @@ function renderResults() {
     pct >= .3   ? ["🤔", "Houston, we have a problem…", "Time to brush up on the cosmos."] :
                   ["😵", "Lost in space!", "Every astronaut starts somewhere — try again!"];
   const celebrate = pct >= .8;
+  const missed = history.map(({ selected, correct }, i) => {
+    if (correct) return "";
+    const item = QUESTIONS[i];
+    return `<li>
+      <h3>Question ${i + 1}: ${item.q}</h3>
+      <p><strong>Your answer:</strong> ${item.a[selected]}</p>
+      <p><strong>Correct answer:</strong> ${item.a[item.c]}</p>
+      <p class="fact">${item.f}</p>
+    </li>`;
+  }).join("");
   card.classList.toggle("celebrate", celebrate);
   card.innerHTML = `
     <div class="results fade-in">
@@ -372,9 +387,20 @@ function renderResults() {
       <h2>${title}</h2>
       <div class="big">${score} / ${QUESTIONS.length}</div>
       <p>${msg}</p>
-      <div class="dots" role="img" aria-label="${score} of ${QUESTIONS.length} answers correct">${history.map((h, i) => `<i class="${h ? "g" : "r"}" style="animation-delay:${i * 60}ms" title="Q${i + 1}: ${h ? "correct" : "wrong"}"></i>`).join("")}</div>
+      <div class="dots" role="img" aria-label="${score} of ${QUESTIONS.length} answers correct">${history.map(({ correct }, i) => `<i class="${correct ? "g" : "r"}" style="animation-delay:${i * 60}ms" title="Q${i + 1}: ${correct ? "correct" : "wrong"}"></i>`).join("")}</div>
+      ${missed ? `
+        <button class="btn" id="review-toggle" aria-expanded="false" aria-controls="missed-review">Show missed questions (${QUESTIONS.length - score})</button>
+        <ol class="review" id="missed-review" hidden>${missed}</ol>
+      ` : `<p>All answers correct — no missed questions to review!</p>`}
       <button class="btn" id="restart">Play again</button>
     </div>`;
+  const reviewToggle = document.getElementById("review-toggle");
+  if (reviewToggle) reviewToggle.addEventListener("click", () => {
+    const review = document.getElementById("missed-review");
+    review.hidden = !review.hidden;
+    reviewToggle.setAttribute("aria-expanded", String(!review.hidden));
+    reviewToggle.textContent = `${review.hidden ? "Show" : "Hide"} missed questions (${QUESTIONS.length - score})`;
+  });
   const restart = document.getElementById("restart");
   restart.addEventListener("click", () => {
     idx = 0; score = 0; history = []; renderQuestion(true);
