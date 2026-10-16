@@ -286,10 +286,20 @@ const QUESTIONS = [
 ];
 
 const card = document.getElementById("card");
+function shuffledQuestions() {
+  const questions = [...QUESTIONS];
+  for (let i = questions.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [questions[i], questions[j]] = [questions[j], questions[i]];
+  }
+  return questions;
+}
+
+let attemptQuestions = shuffledQuestions();
 let idx = 0, score = 0, answered = false, history = [];
 
 function renderQuestion(moveFocus = false) {
-  const item = QUESTIONS[idx];
+  const item = attemptQuestions[idx];
   answered = false;
   card.classList.remove("celebrate");
   card.innerHTML = `
@@ -318,7 +328,7 @@ function renderQuestion(moveFocus = false) {
 function choose(i) {
   if (answered) return;
   answered = true;
-  const item = QUESTIONS[idx];
+  const item = attemptQuestions[idx];
   const opts = [...card.querySelectorAll(".option")];
   const correct = i === item.c;
   history.push(correct);
@@ -377,7 +387,7 @@ function renderResults() {
     </div>`;
   const restart = document.getElementById("restart");
   restart.addEventListener("click", () => {
-    idx = 0; score = 0; history = []; renderQuestion(true);
+    idx = 0; score = 0; history = []; attemptQuestions = shuffledQuestions(); renderQuestion(true);
   });
   restart.focus({ preventScroll: true });
   if (celebrate && !reduceMotion.matches) confetti();
