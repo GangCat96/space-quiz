@@ -239,6 +239,13 @@
   .review-item strong { color: var(--text); }
   .review-item .review-fact { color: var(--muted); }
   .results p.all-correct { margin-bottom: 12px; }
+  .results .copy-status { margin: 12px 0 0; color: var(--text); }
+  .copy-summary {
+    width: 100%; margin-top: 8px; padding: 12px;
+    font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 12px; resize: vertical;
+  }
+  .copy-summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 
   .stars { position: fixed; inset: 0; pointer-events: none; z-index: -1; }
   .confetti { position: fixed; top: -12px; width: 8px; height: 12px; border-radius: 2px; pointer-events: none; animation: fall linear forwards; }
@@ -383,6 +390,7 @@ function renderResults() {
     pct >= .3   ? ["🤔", "Houston, we have a problem…", "Time to brush up on the cosmos."] :
                   ["😵", "Lost in space!", "Every astronaut starts somewhere — try again!"];
   const celebrate = pct >= .8;
+  const summary = `Space Exploration Quiz: ${score} / ${QUESTIONS.length} — ${title}`;
   card.classList.toggle("celebrate", celebrate);
   const missed = history.some(answer => !answer.correct);
   card.innerHTML = `
@@ -411,6 +419,9 @@ function renderResults() {
           }).join("")}
         </section>` : `<p class="all-correct">All answers correct — nothing to review.</p>`}
       <button class="btn" id="restart">Play again</button>
+      <button class="btn" id="copy-result" type="button">Copy result</button>
+      <p class="copy-status" id="copy-status" role="status" aria-atomic="true"></p>
+      <textarea class="copy-summary" id="copy-summary" aria-label="Result summary for manual copying" rows="3" readonly hidden></textarea>
     </div>`;
   const reviewToggle = document.getElementById("review-toggle");
   if (reviewToggle) {
@@ -422,6 +433,27 @@ function renderResults() {
       review.hidden = expanded;
     });
   }
+  const copyButton = document.getElementById("copy-result");
+  const copyStatus = document.getElementById("copy-status");
+  const copySummary = document.getElementById("copy-summary");
+  copySummary.value = summary;
+  copyButton.addEventListener("click", async () => {
+    copyButton.disabled = true;
+    copyStatus.textContent = "Copying result…";
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) {
+        throw new Error("Clipboard unavailable");
+      }
+      await navigator.clipboard.writeText(summary);
+      copySummary.hidden = true;
+      copyStatus.textContent = "Result copied!";
+    } catch {
+      copySummary.hidden = false;
+      copyStatus.textContent = "Could not copy the result. Select and copy the summary below manually.";
+    } finally {
+      copyButton.disabled = false;
+    }
+  });
   const restart = document.getElementById("restart");
   restart.addEventListener("click", () => {
     idx = 0; score = 0; history = []; attemptQuestions = shuffledQuestions(); renderQuestion(true);
